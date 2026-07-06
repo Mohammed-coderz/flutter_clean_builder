@@ -70,6 +70,7 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
                     const SnackBar(content: Text('All generated files copied')),
                   );
                 },
+                onExportZip: context.read<GeneratorCubit>().downloadZip,
               ),
               const SizedBox(height: 18),
               Expanded(
@@ -160,9 +161,11 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
 class _Header extends StatelessWidget {
   const _Header({
     required this.onCopyAll,
+    required this.onExportZip,
   });
 
   final VoidCallback onCopyAll;
+  final VoidCallback onExportZip;
 
   @override
   Widget build(BuildContext context) {
@@ -188,10 +191,21 @@ class _Header extends StatelessWidget {
             ],
           ),
         ),
-        OutlinedButton.icon(
-          onPressed: onCopyAll,
-          icon: const Icon(Icons.copy_all_outlined),
-          label: const Text('Copy all'),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              onPressed: onCopyAll,
+              icon: const Icon(Icons.copy_all_outlined),
+              label: const Text('Copy all'),
+            ),
+            FilledButton.icon(
+              onPressed: onExportZip,
+              icon: const Icon(Icons.archive_outlined),
+              label: const Text('Export ZIP'),
+            ),
+          ],
         ),
       ],
     );

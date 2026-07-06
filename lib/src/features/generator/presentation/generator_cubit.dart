@@ -1,16 +1,22 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../data/clean_architecture_generator.dart';
+import '../data/dart_name_utils.dart';
+import '../data/generated_zip_exporter.dart';
 import '../domain/api_generation_input.dart';
 import 'generator_state.dart';
 
 class GeneratorCubit extends Cubit<GeneratorState> {
   GeneratorCubit({
     CleanArchitectureGenerator? generator,
+    GeneratedZipExporter? zipExporter,
   })  : _generator = generator ?? CleanArchitectureGenerator(),
+        _zipExporter = zipExporter ?? const GeneratedZipExporter(),
         super(const GeneratorState());
 
   final CleanArchitectureGenerator _generator;
+  final GeneratedZipExporter _zipExporter;
+  String _lastFeatureName = 'generated_feature';
 
   void generate(ApiGenerationInput input) {
     final validationMessage = _validate(input);
@@ -21,6 +27,7 @@ class GeneratorCubit extends Cubit<GeneratorState> {
 
     try {
       final files = _generator.generate(input);
+      _lastFeatureName = DartNameUtils.snake(input.featureName);
       emit(GeneratorState(files: files));
     } catch (error) {
       emit(state.copyWith(errorMessage: error.toString()));
@@ -43,6 +50,22 @@ class GeneratorCubit extends Cubit<GeneratorState> {
     }
 
     return buffer.toString();
+  }
+
+  void downloadZip() {
+    if (state.files.isEmpty) {
+      emit(state.copyWith(errorMessage: 'Generate files before exporting zip.'));
+      return;
+    }
+
+    try {
+      _zipExporter.download(
+        fileName: '${_lastFeatureName}_feature.zip',
+        files: state.files,
+      );
+    } catch (error) {
+      emit(state.copyWith(errorMessage: error.toString()));
+    }
   }
 
   String? _validate(ApiGenerationInput input) {

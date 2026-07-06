@@ -27,6 +27,7 @@ flutter run -d chrome
   - starter screen
 - Preview each generated file.
 - Copy one file or copy all generated files.
+- Export generated files as a `.zip`.
 
 ## First Supported Flow
 
@@ -41,7 +42,6 @@ flutter run -d chrome
 
 ## Next Decisions
 
-- Add ZIP export.
 - Add multiple endpoints per feature.
 - Add project-level core templates.
 - Add custom Masafat-style naming/templates.
