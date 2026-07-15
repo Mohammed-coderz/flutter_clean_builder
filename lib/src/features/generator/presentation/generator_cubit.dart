@@ -70,6 +70,16 @@ class GeneratorCubit extends Cubit<GeneratorState> {
 
   String? _validate(ApiGenerationInput input) {
     if (input.featureName.trim().isEmpty) return 'Feature name is required.';
+    if (input.endpoints.isNotEmpty) {
+      for (final endpoint in input.endpoints) {
+        if (endpoint.modelName.trim().isEmpty) return 'Every endpoint needs a model name.';
+        if (endpoint.operationName.trim().isEmpty) return 'Every endpoint needs an operation name.';
+        if (endpoint.endpoint.trim().isEmpty) return 'Every endpoint needs an endpoint path.';
+        if (endpoint.responseJson.trim().isEmpty) return 'Every endpoint needs response JSON.';
+      }
+      return null;
+    }
+
     if (input.modelName.trim().isEmpty) return 'Model name is required.';
     if (input.operationName.trim().isEmpty) return 'Operation name is required.';
     if (input.endpoint.trim().isEmpty) return 'Endpoint is required.';

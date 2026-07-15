@@ -13,125 +13,123 @@ class CleanArchitectureGenerator {
 
   List<GeneratedFile> generate(ApiGenerationInput input) {
     final featureSnake = DartNameUtils.snake(input.featureName);
-    final modelPascal = DartNameUtils.pascal(input.modelName);
-    final modelSnake = DartNameUtils.snake(input.modelName);
-    final operationCamel = DartNameUtils.camel(input.operationName);
-    final operationSnake = DartNameUtils.snake(input.operationName);
     final featurePascal = DartNameUtils.pascal(input.featureName);
-
-    final responseSchema = _parser.parseResponse(
-      modelName: modelPascal,
-      jsonSource: input.responseJson,
-    );
-    final requestSchema = _parser.parseRequest(
-      modelName: modelPascal,
-      jsonSource: input.requestJson,
-    );
-    final hasRequest = requestSchema.fields.isNotEmpty;
-    final returnsList = responseSchema.isListResponse;
-
+    final operations = input.resolvedEndpoints.map(_buildOperation).toList();
+    final firstOperation = operations.first;
     final basePath = 'lib/features/$featureSnake';
-    final files = <GeneratedFile>[
-      GeneratedFile(
-        path: '$basePath/domain/entities/$modelSnake.dart',
-        content: _entity(responseSchema),
-      ),
-      GeneratedFile(
-        path: '$basePath/data/models/${modelSnake}_model.dart',
-        content: _model(responseSchema),
-      ),
-      GeneratedFile(
-        path: '$basePath/data/datasources/${featureSnake}_remote_data_source.dart',
-        content: _remoteDataSource(
-          input: input,
-          featurePascal: featurePascal,
-          modelPascal: modelPascal,
-          modelSnake: modelSnake,
-          operationCamel: operationCamel,
-          requestSchema: requestSchema,
-          hasRequest: hasRequest,
-          returnsList: returnsList,
-        ),
-      ),
-      GeneratedFile(
-        path: '$basePath/domain/repositories/${featureSnake}_repository.dart',
-        content: _repository(
-          featurePascal: featurePascal,
-          modelPascal: modelPascal,
-          operationCamel: operationCamel,
-          requestSchema: requestSchema,
-          hasRequest: hasRequest,
-          returnsList: returnsList,
-        ),
-      ),
-      GeneratedFile(
-        path: '$basePath/data/repositories/${featureSnake}_repository_impl.dart',
-        content: _repositoryImpl(
-          featurePascal: featurePascal,
-          featureSnake: featureSnake,
-          modelPascal: modelPascal,
-          operationCamel: operationCamel,
-          requestSchema: requestSchema,
-          hasRequest: hasRequest,
-          returnsList: returnsList,
-        ),
-      ),
-      GeneratedFile(
-        path: '$basePath/domain/usecases/${operationSnake}_usecase.dart',
-        content: _usecase(
-          featurePascal: featurePascal,
-          featureSnake: featureSnake,
-          modelPascal: modelPascal,
-          operationCamel: operationCamel,
-          requestSchema: requestSchema,
-          hasRequest: hasRequest,
-          returnsList: returnsList,
-        ),
-      ),
-      GeneratedFile(
-        path: '$basePath/presentation/cubit/${featureSnake}_state.dart',
-        content: _state(
-          featurePascal: featurePascal,
-          modelPascal: modelPascal,
-          returnsList: returnsList,
-        ),
-      ),
-      GeneratedFile(
-        path: '$basePath/presentation/cubit/${featureSnake}_cubit.dart',
-        content: _cubit(
-          featurePascal: featurePascal,
-          operationSnake: operationSnake,
-          operationCamel: operationCamel,
-          requestSchema: requestSchema,
-          hasRequest: hasRequest,
-        ),
-      ),
-      GeneratedFile(
-        path: '$basePath/presentation/screens/${featureSnake}_screen.dart',
-        content: _screen(
-          input: input,
-          featurePascal: featurePascal,
-          featureSnake: featureSnake,
-          modelPascal: modelPascal,
-          operationCamel: operationCamel,
-          operationSnake: operationSnake,
-          hasRequest: hasRequest,
-          returnsList: returnsList,
-        ),
-      ),
-    ];
 
-    if (hasRequest) {
-      files.insert(
-        2,
-        GeneratedFile(
-          path: '$basePath/data/models/${modelSnake}_request.dart',
-          content: _requestModel(requestSchema, modelSnake),
+    final files = <GeneratedFile>[];
+    final addedPaths = <String>{};
+
+    void addFile(String path, String content) {
+      if (addedPaths.add(path)) {
+        files.add(GeneratedFile(path: path, content: content));
+      }
+    }
+
+    for (final operation in operations) {
+      addFile(
+        '$basePath/domain/entities/${operation.modelSnake}.dart',
+        _entity(operation.responseSchema),
+      );
+      addFile(
+        '$basePath/data/models/${operation.modelSnake}_model.dart',
+        _model(operation.responseSchema),
+      );
+
+      if (operation.hasRequest) {
+        addFile(
+          '$basePath/data/models/${operation.requestSnake}.dart',
+          _requestModel(operation.requestSchema),
+        );
+      }
+    }
+
+    addFile(
+      '$basePath/data/datasources/${featureSnake}_remote_data_source.dart',
+      _remoteDataSource(
+        featurePascal: featurePascal,
+        operations: operations,
+      ),
+    );
+    addFile(
+      '$basePath/domain/repositories/${featureSnake}_repository.dart',
+      _repository(
+        featurePascal: featurePascal,
+        operations: operations,
+      ),
+    );
+    addFile(
+      '$basePath/data/repositories/${featureSnake}_repository_impl.dart',
+      _repositoryImpl(
+        featurePascal: featurePascal,
+        featureSnake: featureSnake,
+        operations: operations,
+      ),
+    );
+
+    for (final operation in operations) {
+      addFile(
+        '$basePath/domain/usecases/${operation.operationSnake}_usecase.dart',
+        _usecase(
+          featurePascal: featurePascal,
+          featureSnake: featureSnake,
+          operation: operation,
         ),
       );
     }
 
+    addFile(
+      '$basePath/presentation/cubit/${featureSnake}_state.dart',
+      _state(featurePascal),
+    );
+    addFile(
+      '$basePath/presentation/cubit/${featureSnake}_cubit.dart',
+      _cubit(
+        featurePascal: featurePascal,
+        featureSnake: featureSnake,
+        operations: operations,
+      ),
+    );
+    addFile(
+      '$basePath/presentation/screens/${featureSnake}_screen.dart',
+      _screen(
+        input: input,
+        featurePascal: featurePascal,
+        featureSnake: featureSnake,
+        operation: firstOperation,
+        operations: operations,
+      ),
+    );
+
     return files;
+  }
+
+  _GeneratedOperation _buildOperation(ApiEndpointInput endpoint) {
+    final modelPascal = DartNameUtils.pascal(endpoint.modelName);
+    final operationPascal = DartNameUtils.pascal(endpoint.operationName);
+    final responseSchema = _parser.parseResponse(
+      modelName: modelPascal,
+      jsonSource: endpoint.responseJson,
+    );
+    final requestSchema = _parser.parseRequest(
+      modelName: operationPascal,
+      jsonSource: endpoint.requestJson,
+    );
+
+    return _GeneratedOperation(
+      endpoint: endpoint,
+      responseSchema: responseSchema,
+      requestSchema: requestSchema,
+      modelPascal: modelPascal,
+      modelSnake: DartNameUtils.snake(endpoint.modelName),
+      operationCamel: DartNameUtils.camel(endpoint.operationName),
+      operationPascal: operationPascal,
+      operationSnake: DartNameUtils.snake(endpoint.operationName),
+      requestSnake: '${DartNameUtils.snake(endpoint.operationName)}_request',
+      hasRequest: requestSchema.fields.isNotEmpty,
+      returnsList: responseSchema.isListResponse,
+    );
   }
 
   String _entity(SchemaModel schema) {
@@ -197,7 +195,7 @@ class CleanArchitectureGenerator {
     return buffer.toString();
   }
 
-  String _requestModel(SchemaModel schema, String modelSnake) {
+  String _requestModel(SchemaModel schema) {
     final buffer = StringBuffer()
       ..writeln('class ${schema.name} {')
       ..writeln('  const ${schema.name}({');
@@ -232,34 +230,27 @@ class CleanArchitectureGenerator {
   }
 
   String _remoteDataSource({
-    required ApiGenerationInput input,
     required String featurePascal,
-    required String modelPascal,
-    required String modelSnake,
-    required String operationCamel,
-    required SchemaModel requestSchema,
-    required bool hasRequest,
-    required bool returnsList,
+    required List<_GeneratedOperation> operations,
   }) {
-    final method = input.method.toUpperCase();
-    final returnType = returnsList ? 'List<${modelPascal}Model>' : '${modelPascal}Model';
-    final requestType = requestSchema.name;
-    final requestImport = hasRequest ? "import '../models/${modelSnake}_request.dart';\n" : '';
-    final requestParam = hasRequest ? '$requestType request' : '';
-    final requestBody = hasRequest
-        ? ",\n      body: jsonEncode(request.toJson()),"
-        : '';
-    final headers = input.requiresAuth
-        ? "{...headers, 'Content-Type': 'application/json'}"
-        : "{'Content-Type': 'application/json', ...headers}";
+    final modelImports = operations
+        .map((operation) => "import '../models/${operation.modelSnake}_model.dart';")
+        .toSet()
+        .join('\n');
+    final requestImports = operations
+        .where((operation) => operation.hasRequest)
+        .map((operation) => "import '../models/${operation.requestSnake}.dart';")
+        .toSet()
+        .join('\n');
+    final methodBlocks = operations.map(_remoteMethod).join('\n');
 
     return '''
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import '../models/${modelSnake}_model.dart';
-${requestImport}class ${featurePascal}RemoteDataSource {
+$modelImports
+${requestImports.isEmpty ? '' : '$requestImports\n'}class ${featurePascal}RemoteDataSource {
   ${featurePascal}RemoteDataSource({
     required this.client,
     required this.baseUrl,
@@ -270,21 +261,7 @@ ${requestImport}class ${featurePascal}RemoteDataSource {
   final String baseUrl;
   final Map<String, String> headers;
 
-  Future<$returnType> $operationCamel($requestParam) async {
-    final uri = Uri.parse('\$baseUrl${input.endpoint}');
-    final response = await client.${method.toLowerCase()}(
-      uri,
-      headers: $headers$requestBody,
-    );
-
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Request failed: \${response.statusCode}');
-    }
-
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
-    final payload = _extractPayload(body);
-${returnsList ? _listPayload(modelPascal) : _objectPayload(modelPascal)}
-  }
+$methodBlocks
 
   Object? _extractPayload(Map<String, dynamic> body) {
     for (final key in const ['data', 'result', 'items', 'records']) {
@@ -306,23 +283,57 @@ ${returnsList ? _listPayload(modelPascal) : _objectPayload(modelPascal)}
 ''';
   }
 
-  String _repository({
-    required String featurePascal,
-    required String modelPascal,
-    required String operationCamel,
-    required SchemaModel requestSchema,
-    required bool hasRequest,
-    required bool returnsList,
-  }) {
-    final returnType = returnsList ? 'List<$modelPascal>' : modelPascal;
-    final requestImport = hasRequest ? "\nimport '../../data/models/${DartNameUtils.snake(modelPascal)}_request.dart';" : '';
-    final requestParam = hasRequest ? '${requestSchema.name} request' : '';
+  String _remoteMethod(_GeneratedOperation operation) {
+    final method = operation.endpoint.method.toUpperCase();
+    final returnType = operation.modelReturnType(useModel: true);
+    final requestParam = operation.hasRequest ? '${operation.requestSchema.name} request' : '';
+    final requestBody = operation.hasRequest
+        ? ",\n      body: jsonEncode(request.toJson()),"
+        : '';
+    final headers = operation.endpoint.requiresAuth
+        ? "{...headers, 'Content-Type': 'application/json'}"
+        : "{'Content-Type': 'application/json', ...headers}";
 
     return '''
-import '../entities/${DartNameUtils.snake(modelPascal)}.dart';$requestImport
+  Future<$returnType> ${operation.operationCamel}($requestParam) async {
+    final uri = Uri.parse('\$baseUrl${operation.endpoint.endpoint}');
+    final response = await client.${method.toLowerCase()}(
+      uri,
+      headers: $headers$requestBody,
+    );
 
-abstract class ${featurePascal}Repository {
-  Future<$returnType> $operationCamel($requestParam);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Request failed: \${response.statusCode}');
+    }
+
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final payload = _extractPayload(body);
+${operation.returnsList ? _listPayload(operation.modelPascal) : _objectPayload(operation.modelPascal)}
+  }
+''';
+  }
+
+  String _repository({
+    required String featurePascal,
+    required List<_GeneratedOperation> operations,
+  }) {
+    final entityImports = operations
+        .map((operation) => "import '../entities/${operation.modelSnake}.dart';")
+        .toSet()
+        .join('\n');
+    final requestImports = operations
+        .where((operation) => operation.hasRequest)
+        .map((operation) => "import '../../data/models/${operation.requestSnake}.dart';")
+        .toSet()
+        .join('\n');
+    final methods = operations.map((operation) {
+      return '  Future<${operation.modelReturnType()}> ${operation.operationCamel}(${operation.requestParameter()});';
+    }).join('\n');
+
+    return '''
+$entityImports
+${requestImports.isEmpty ? '' : '$requestImports\n'}abstract class ${featurePascal}Repository {
+$methods
 }
 ''';
   }
@@ -330,31 +341,36 @@ abstract class ${featurePascal}Repository {
   String _repositoryImpl({
     required String featurePascal,
     required String featureSnake,
-    required String modelPascal,
-    required String operationCamel,
-    required SchemaModel requestSchema,
-    required bool hasRequest,
-    required bool returnsList,
+    required List<_GeneratedOperation> operations,
   }) {
-    final returnType = returnsList ? 'List<$modelPascal>' : modelPascal;
-    final requestImport = hasRequest ? "\nimport '../models/${DartNameUtils.snake(modelPascal)}_request.dart';" : '';
-    final requestParam = hasRequest ? '${requestSchema.name} request' : '';
-    final requestArg = hasRequest ? 'request' : '';
+    final entityImports = operations
+        .map((operation) => "import '../../domain/entities/${operation.modelSnake}.dart';")
+        .toSet()
+        .join('\n');
+    final requestImports = operations
+        .where((operation) => operation.hasRequest)
+        .map((operation) => "import '../models/${operation.requestSnake}.dart';")
+        .toSet()
+        .join('\n');
+    final methods = operations.map((operation) {
+      return '''
+  @override
+  Future<${operation.modelReturnType()}> ${operation.operationCamel}(${operation.requestParameter()}) {
+    return remoteDataSource.${operation.operationCamel}(${operation.requestArgument()});
+  }
+''';
+    }).join('\n');
 
     return '''
-import '../../domain/entities/${DartNameUtils.snake(modelPascal)}.dart';
+$entityImports
 import '../../domain/repositories/${featureSnake}_repository.dart';
-import '../datasources/${featureSnake}_remote_data_source.dart';$requestImport
-
-class ${featurePascal}RepositoryImpl implements ${featurePascal}Repository {
+import '../datasources/${featureSnake}_remote_data_source.dart';
+${requestImports.isEmpty ? '' : '$requestImports\n'}class ${featurePascal}RepositoryImpl implements ${featurePascal}Repository {
   const ${featurePascal}RepositoryImpl(this.remoteDataSource);
 
   final ${featurePascal}RemoteDataSource remoteDataSource;
 
-  @override
-  Future<$returnType> $operationCamel($requestParam) {
-    return remoteDataSource.$operationCamel($requestArg);
-  }
+$methods
 }
 ''';
   }
@@ -362,44 +378,30 @@ class ${featurePascal}RepositoryImpl implements ${featurePascal}Repository {
   String _usecase({
     required String featurePascal,
     required String featureSnake,
-    required String modelPascal,
-    required String operationCamel,
-    required SchemaModel requestSchema,
-    required bool hasRequest,
-    required bool returnsList,
+    required _GeneratedOperation operation,
   }) {
-    final usecaseName = '${DartNameUtils.pascal(operationCamel)}UseCase';
-    final returnType = returnsList ? 'List<$modelPascal>' : modelPascal;
-    final requestImport = hasRequest ? "\nimport '../../data/models/${DartNameUtils.snake(modelPascal)}_request.dart';" : '';
-    final requestParam = hasRequest ? '${requestSchema.name} request' : '';
-    final requestArg = hasRequest ? 'request' : '';
+    final requestImport = operation.hasRequest
+        ? "\nimport '../../data/models/${operation.requestSnake}.dart';"
+        : '';
 
     return '''
-import '../entities/${DartNameUtils.snake(modelPascal)}.dart';
+import '../entities/${operation.modelSnake}.dart';
 import '../repositories/${featureSnake}_repository.dart';$requestImport
 
-class $usecaseName {
-  const $usecaseName(this.repository);
+class ${operation.operationPascal}UseCase {
+  const ${operation.operationPascal}UseCase(this.repository);
 
   final ${featurePascal}Repository repository;
 
-  Future<$returnType> call($requestParam) {
-    return repository.$operationCamel($requestArg);
+  Future<${operation.modelReturnType()}> call(${operation.requestParameter()}) {
+    return repository.${operation.operationCamel}(${operation.requestArgument()});
   }
 }
 ''';
   }
 
-  String _state({
-    required String featurePascal,
-    required String modelPascal,
-    required bool returnsList,
-  }) {
-    final dataType = returnsList ? 'List<$modelPascal>' : modelPascal;
-
+  String _state(String featurePascal) {
     return '''
-import '../../domain/entities/${DartNameUtils.snake(modelPascal)}.dart';
-
 abstract class ${featurePascal}State {
   const ${featurePascal}State();
 }
@@ -409,18 +411,28 @@ class ${featurePascal}Initial extends ${featurePascal}State {
 }
 
 class ${featurePascal}Loading extends ${featurePascal}State {
-  const ${featurePascal}Loading();
+  const ${featurePascal}Loading(this.operation);
+
+  final String operation;
 }
 
 class ${featurePascal}Success extends ${featurePascal}State {
-  const ${featurePascal}Success(this.data);
+  const ${featurePascal}Success({
+    required this.operation,
+    required this.data,
+  });
 
-  final $dataType data;
+  final String operation;
+  final Object? data;
 }
 
 class ${featurePascal}Failure extends ${featurePascal}State {
-  const ${featurePascal}Failure(this.message);
+  const ${featurePascal}Failure({
+    required this.operation,
+    required this.message,
+  });
 
+  final String operation;
   final String message;
 }
 ''';
@@ -428,38 +440,62 @@ class ${featurePascal}Failure extends ${featurePascal}State {
 
   String _cubit({
     required String featurePascal,
-    required String operationSnake,
-    required String operationCamel,
-    required SchemaModel requestSchema,
-    required bool hasRequest,
+    required String featureSnake,
+    required List<_GeneratedOperation> operations,
   }) {
-    final usecaseName = '${DartNameUtils.pascal(operationCamel)}UseCase';
-    final requestImport = hasRequest ? "\nimport '../../data/models/${DartNameUtils.snake(requestSchema.name.replaceAll('Request', ''))}_request.dart';" : '';
-    final requestParam = hasRequest ? '${requestSchema.name} request' : '';
-    final requestArg = hasRequest ? 'request' : '';
+    final usecaseImports = operations
+        .map((operation) => "import '../../domain/usecases/${operation.operationSnake}_usecase.dart';")
+        .join('\n');
+    final requestImports = operations
+        .where((operation) => operation.hasRequest)
+        .map((operation) => "import '../../data/models/${operation.requestSnake}.dart';")
+        .toSet()
+        .join('\n');
+    final constructorParams = operations
+        .map((operation) => '    required ${operation.operationPascal}UseCase ${operation.operationCamel}UseCase,')
+        .join('\n');
+    final assignments = operations
+        .map((operation) => '        _${operation.operationCamel}UseCase = ${operation.operationCamel}UseCase,')
+        .join('\n');
+    final fields = operations
+        .map((operation) => '  final ${operation.operationPascal}UseCase _${operation.operationCamel}UseCase;')
+        .join('\n');
+    final methods = operations.map((operation) {
+      return '''
+  Future<void> ${operation.operationCamel}(${operation.requestParameter()}) async {
+    emit(const ${featurePascal}Loading('${operation.operationCamel}'));
+
+    try {
+      final result = await _${operation.operationCamel}UseCase(${operation.requestArgument()});
+      emit(${featurePascal}Success(
+        operation: '${operation.operationCamel}',
+        data: result,
+      ));
+    } catch (error) {
+      emit(${featurePascal}Failure(
+        operation: '${operation.operationCamel}',
+        message: error.toString(),
+      ));
+    }
+  }
+''';
+    }).join('\n');
 
     return '''
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../domain/usecases/${operationSnake}_usecase.dart';$requestImport
-import '${DartNameUtils.snake(featurePascal)}_state.dart';
+$usecaseImports
+${requestImports.isEmpty ? '' : '$requestImports\n'}import '${featureSnake}_state.dart';
 
 class ${featurePascal}Cubit extends Cubit<${featurePascal}State> {
-  ${featurePascal}Cubit(this._${operationCamel}UseCase)
-      : super(const ${featurePascal}Initial());
+  ${featurePascal}Cubit({
+$constructorParams
+  })  : $assignments
+        super(const ${featurePascal}Initial());
 
-  final $usecaseName _${operationCamel}UseCase;
+$fields
 
-  Future<void> $operationCamel($requestParam) async {
-    emit(const ${featurePascal}Loading());
-
-    try {
-      final result = await _${operationCamel}UseCase($requestArg);
-      emit(${featurePascal}Success(result));
-    } catch (error) {
-      emit(${featurePascal}Failure(error.toString()));
-    }
-  }
+$methods
 }
 ''';
   }
@@ -468,17 +504,20 @@ class ${featurePascal}Cubit extends Cubit<${featurePascal}State> {
     required ApiGenerationInput input,
     required String featurePascal,
     required String featureSnake,
-    required String modelPascal,
-    required String operationCamel,
-    required String operationSnake,
-    required bool hasRequest,
-    required bool returnsList,
+    required _GeneratedOperation operation,
+    required List<_GeneratedOperation> operations,
   }) {
-    final usecaseName = '${DartNameUtils.pascal(operationCamel)}UseCase';
     final title = DartNameUtils.pascal(input.featureName).replaceAllMapped(
       RegExp(r'([a-z])([A-Z])'),
       (match) => '${match.group(1)} ${match.group(2)}',
     );
+    final usecaseImports = operations
+        .map((item) => "import '../../domain/usecases/${item.operationSnake}_usecase.dart';")
+        .join('\n');
+    final cubitArgs = operations
+        .map((item) => '          ${item.operationCamel}UseCase: ${item.operationPascal}UseCase(repository),')
+        .join('\n');
+    final initialCall = operation.hasRequest ? '' : '..${operation.operationCamel}()';
 
     return '''
 import 'package:flutter/material.dart';
@@ -487,7 +526,7 @@ import 'package:http/http.dart' as http;
 
 import '../../data/datasources/${featureSnake}_remote_data_source.dart';
 import '../../data/repositories/${featureSnake}_repository_impl.dart';
-import '../../domain/usecases/${operationSnake}_usecase.dart';
+$usecaseImports
 import '../cubit/${featureSnake}_cubit.dart';
 import '../cubit/${featureSnake}_state.dart';
 
@@ -504,8 +543,9 @@ class ${featurePascal}Screen extends StatelessWidget {
           headers: const {},
         );
         final repository = ${featurePascal}RepositoryImpl(dataSource);
-        return ${featurePascal}Cubit($usecaseName(repository))
-          ${hasRequest ? '' : '..$operationCamel()'};
+        return ${featurePascal}Cubit(
+$cubitArgs
+        )$initialCall;
       },
       child: Scaffold(
         appBar: AppBar(title: const Text('$title')),
@@ -520,11 +560,11 @@ class ${featurePascal}Screen extends StatelessWidget {
             }
 
             if (state is ${featurePascal}Success) {
-${returnsList ? _listUi(modelPascal) : _detailsUi(modelPascal)}
+${operation.returnsList ? _listUi() : _detailsUi()}
             }
 
             return Center(
-              child: ${hasRequest ? "ElevatedButton(onPressed: () {}, child: const Text('Call API'))" : "const Text('No data yet')"},
+              child: ${operation.hasRequest ? "ElevatedButton(onPressed: () {}, child: const Text('Call API'))" : "const Text('No data yet')"},
             );
           },
         ),
@@ -558,9 +598,9 @@ ${returnsList ? _listUi(modelPascal) : _detailsUi(modelPascal)}
 ''';
   }
 
-  String _listUi(String modelPascal) {
+  String _listUi() {
     return '''
-              final items = state.data;
+              final items = state.data is List ? state.data as List : const [];
               if (items.isEmpty) {
                 return const Center(child: Text('No records found'));
               }
@@ -581,7 +621,7 @@ ${returnsList ? _listUi(modelPascal) : _detailsUi(modelPascal)}
 ''';
   }
 
-  String _detailsUi(String modelPascal) {
+  String _detailsUi() {
     return '''
               final item = state.data;
               return Padding(
@@ -616,5 +656,46 @@ ${returnsList ? _listUi(modelPascal) : _detailsUi(modelPascal)}
       'Map<String, dynamic>' => '$key as Map<String, dynamic>? ?? const {}',
       _ => "$key?.toString() ?? ''",
     };
+  }
+}
+
+class _GeneratedOperation {
+  const _GeneratedOperation({
+    required this.endpoint,
+    required this.responseSchema,
+    required this.requestSchema,
+    required this.modelPascal,
+    required this.modelSnake,
+    required this.operationCamel,
+    required this.operationPascal,
+    required this.operationSnake,
+    required this.requestSnake,
+    required this.hasRequest,
+    required this.returnsList,
+  });
+
+  final ApiEndpointInput endpoint;
+  final SchemaModel responseSchema;
+  final SchemaModel requestSchema;
+  final String modelPascal;
+  final String modelSnake;
+  final String operationCamel;
+  final String operationPascal;
+  final String operationSnake;
+  final String requestSnake;
+  final bool hasRequest;
+  final bool returnsList;
+
+  String modelReturnType({bool useModel = false}) {
+    final type = useModel ? '${modelPascal}Model' : modelPascal;
+    return returnsList ? 'List<$type>' : type;
+  }
+
+  String requestParameter() {
+    return hasRequest ? '${requestSchema.name} request' : '';
+  }
+
+  String requestArgument() {
+    return hasRequest ? 'request' : '';
   }
 }

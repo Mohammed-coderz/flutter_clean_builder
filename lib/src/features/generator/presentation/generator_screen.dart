@@ -40,6 +40,7 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
 
   String _method = 'GET';
   bool _requiresAuth = true;
+  final List<ApiEndpointInput> _endpoints = [];
 
   @override
   void dispose() {
@@ -90,8 +91,11 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
                             responseJsonController: _responseJsonController,
                             method: _method,
                             requiresAuth: _requiresAuth,
+                            endpoints: _endpoints,
                             onMethodChanged: _setMethod,
                             onRequiresAuthChanged: _setRequiresAuth,
+                            onAddEndpoint: _addEndpoint,
+                            onRemoveEndpoint: _removeEndpoint,
                             onGenerate: _generate,
                           ),
                           const SizedBox(height: 14),
@@ -114,8 +118,11 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
                             responseJsonController: _responseJsonController,
                             method: _method,
                             requiresAuth: _requiresAuth,
+                            endpoints: _endpoints,
                             onMethodChanged: _setMethod,
                             onRequiresAuthChanged: _setRequiresAuth,
+                            onAddEndpoint: _addEndpoint,
+                            onRemoveEndpoint: _removeEndpoint,
                             onGenerate: _generate,
                           ),
                         ),
@@ -142,6 +149,26 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
     setState(() => _requiresAuth = value);
   }
 
+  void _addEndpoint() {
+    final endpoint = _buildEndpointInput();
+    final errorMessage = _validateEndpoint(endpoint);
+    if (errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessage)),
+      );
+      return;
+    }
+
+    setState(() => _endpoints.add(endpoint));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${endpoint.operationName} added')),
+    );
+  }
+
+  void _removeEndpoint(int index) {
+    setState(() => _endpoints.removeAt(index));
+  }
+
   void _generate() {
     final input = ApiGenerationInput(
       featureName: _featureNameController.text.trim(),
@@ -152,9 +179,30 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
       requestJson: _requestJsonController.text,
       responseJson: _responseJsonController.text,
       requiresAuth: _requiresAuth,
+      endpoints: List<ApiEndpointInput>.unmodifiable(_endpoints),
     );
 
     context.read<GeneratorCubit>().generate(input);
+  }
+
+  ApiEndpointInput _buildEndpointInput() {
+    return ApiEndpointInput(
+      modelName: _modelNameController.text.trim(),
+      operationName: _operationNameController.text.trim(),
+      method: _method,
+      endpoint: _endpointController.text.trim(),
+      requestJson: _requestJsonController.text,
+      responseJson: _responseJsonController.text,
+      requiresAuth: _requiresAuth,
+    );
+  }
+
+  String? _validateEndpoint(ApiEndpointInput endpoint) {
+    if (endpoint.modelName.isEmpty) return 'Model name is required.';
+    if (endpoint.operationName.isEmpty) return 'Operation name is required.';
+    if (endpoint.endpoint.isEmpty) return 'Endpoint is required.';
+    if (endpoint.responseJson.trim().isEmpty) return 'Response JSON is required.';
+    return null;
   }
 }
 
@@ -222,8 +270,11 @@ class _InputPanel extends StatelessWidget {
     required this.responseJsonController,
     required this.method,
     required this.requiresAuth,
+    required this.endpoints,
     required this.onMethodChanged,
     required this.onRequiresAuthChanged,
+    required this.onAddEndpoint,
+    required this.onRemoveEndpoint,
     required this.onGenerate,
   });
 
@@ -235,8 +286,11 @@ class _InputPanel extends StatelessWidget {
   final TextEditingController responseJsonController;
   final String method;
   final bool requiresAuth;
+  final List<ApiEndpointInput> endpoints;
   final ValueChanged<String?> onMethodChanged;
   final ValueChanged<bool> onRequiresAuthChanged;
+  final VoidCallback onAddEndpoint;
+  final ValueChanged<int> onRemoveEndpoint;
   final VoidCallback onGenerate;
 
   @override
@@ -314,6 +368,10 @@ class _InputPanel extends StatelessWidget {
             contentPadding: EdgeInsets.zero,
             title: const Text('Requires bearer/auth headers'),
           ),
+          _EndpointList(
+            endpoints: endpoints,
+            onRemoveEndpoint: onRemoveEndpoint,
+          ),
           const SizedBox(height: 10),
           BuilderTextField(
             controller: requestJsonController,
@@ -328,13 +386,141 @@ class _InputPanel extends StatelessWidget {
             maxLines: 12,
           ),
           const SizedBox(height: 14),
-          FilledButton.icon(
-            onPressed: onGenerate,
-            icon: const Icon(Icons.auto_fix_high),
-            label: const Text('Generate feature'),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onAddEndpoint,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add endpoint'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: onGenerate,
+                  icon: const Icon(Icons.auto_fix_high),
+                  label: const Text('Generate feature'),
+                ),
+              ),
+            ],
           ),
-          ],
+        ],
+      ),
+      ),
+    );
+  }
+}
+
+class _EndpointList extends StatelessWidget {
+  const _EndpointList({
+    required this.endpoints,
+    required this.onRemoveEndpoint,
+  });
+
+  final List<ApiEndpointInput> endpoints;
+  final ValueChanged<int> onRemoveEndpoint;
+
+  @override
+  Widget build(BuildContext context) {
+    if (endpoints.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
         ),
+        child: const Text(
+          'No endpoints added. Generate will use the current endpoint only.',
+          style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Added endpoints (${endpoints.length})',
+            style: const TextStyle(
+              color: Color(0xFF334155),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...List.generate(endpoints.length, (index) {
+            final endpoint = endpoints[index];
+            return Container(
+              margin: EdgeInsets.only(bottom: index == endpoints.length - 1 ? 0 : 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      endpoint.method,
+                      style: const TextStyle(
+                        color: Color(0xFF1D4ED8),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          endpoint.operationName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF0F172A),
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          endpoint.endpoint,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => onRemoveEndpoint(index),
+                    icon: const Icon(Icons.close, size: 18),
+                    tooltip: 'Remove endpoint',
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
       ),
     );
   }
