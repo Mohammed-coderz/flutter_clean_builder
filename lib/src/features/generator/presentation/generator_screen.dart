@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../data/builder_schema_io.dart';
 import '../domain/api_generation_input.dart';
 import 'generator_cubit.dart';
 import 'generator_state.dart';
@@ -41,6 +42,7 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
   String _method = 'GET';
   bool _requiresAuth = true;
   final List<ApiEndpointInput> _endpoints = [];
+  final BuilderSchemaIo _schemaIo = const BuilderSchemaIo();
 
   @override
   void dispose() {
@@ -72,6 +74,8 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
                   );
                 },
                 onExportZip: context.read<GeneratorCubit>().downloadZip,
+                onSaveSchema: _saveSchema,
+                onLoadSchema: _loadSchema,
               ),
               const SizedBox(height: 18),
               Expanded(
@@ -170,7 +174,11 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
   }
 
   void _generate() {
-    final input = ApiGenerationInput(
+    context.read<GeneratorCubit>().generate(_buildInput());
+  }
+
+  ApiGenerationInput _buildInput() {
+    return ApiGenerationInput(
       featureName: _featureNameController.text.trim(),
       modelName: _modelNameController.text.trim(),
       operationName: _operationNameController.text.trim(),
@@ -181,8 +189,61 @@ class _GeneratorScreenState extends State<GeneratorScreen> {
       requiresAuth: _requiresAuth,
       endpoints: List<ApiEndpointInput>.unmodifiable(_endpoints),
     );
+  }
 
-    context.read<GeneratorCubit>().generate(input);
+  void _saveSchema() {
+    final input = _buildInput();
+    if (input.featureName.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Feature name is required before saving schema.')),
+      );
+      return;
+    }
+
+    try {
+      _schemaIo.downloadSchema(input);
+    } catch (error) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString())),
+      );
+    }
+  }
+
+  Future<void> _loadSchema() async {
+    try {
+      final input = await _schemaIo.pickSchema();
+      if (input == null || !mounted) return;
+      _applyInput(input);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Builder schema loaded')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString())),
+      );
+    }
+  }
+
+  void _applyInput(ApiGenerationInput input) {
+    setState(() {
+      _featureNameController.text = input.featureName;
+      _modelNameController.text = input.modelName;
+      _operationNameController.text = input.operationName;
+      _method = _normalizeMethod(input.method);
+      _endpointController.text = input.endpoint;
+      _requestJsonController.text = input.requestJson;
+      _responseJsonController.text = input.responseJson;
+      _requiresAuth = input.requiresAuth;
+      _endpoints
+        ..clear()
+        ..addAll(input.endpoints);
+    });
+  }
+
+  String _normalizeMethod(String value) {
+    final method = value.toUpperCase();
+    return ['GET', 'POST', 'PUT', 'DELETE'].contains(method) ? method : 'GET';
   }
 
   ApiEndpointInput _buildEndpointInput() {
@@ -210,10 +271,14 @@ class _Header extends StatelessWidget {
   const _Header({
     required this.onCopyAll,
     required this.onExportZip,
+    required this.onSaveSchema,
+    required this.onLoadSchema,
   });
 
   final VoidCallback onCopyAll;
   final VoidCallback onExportZip;
+  final VoidCallback onSaveSchema;
+  final VoidCallback onLoadSchema;
 
   @override
   Widget build(BuildContext context) {
@@ -243,6 +308,16 @@ class _Header extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
+            OutlinedButton.icon(
+              onPressed: onLoadSchema,
+              icon: const Icon(Icons.upload_file_outlined),
+              label: const Text('Load Schema'),
+            ),
+            OutlinedButton.icon(
+              onPressed: onSaveSchema,
+              icon: const Icon(Icons.save_alt_outlined),
+              label: const Text('Save Schema'),
+            ),
             OutlinedButton.icon(
               onPressed: onCopyAll,
               icon: const Icon(Icons.copy_all_outlined),

@@ -29,6 +29,7 @@ flutter run -d chrome
 - Copy one file or copy all generated files.
 - Export generated files as a `.zip`.
 - Add multiple endpoints to the same feature before generating.
+- Save and load builder schema files as `.builder.json`.
 
 ## First Supported Flow
 
@@ -40,6 +41,16 @@ flutter run -d chrome
   - `items`
   - `records`
   - nested `data.result`
+
+## Builder Schema
+
+Use `Save Schema` to download the current feature setup as:
+
+```txt
+driver_loads.builder.json
+```
+
+Use `Load Schema` to restore the feature name, current endpoint fields, auth option, and all added endpoints.
 
 ## Next Decisions
 
